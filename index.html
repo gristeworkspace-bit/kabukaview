@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>株価データビューア — KabukaStockView</title>
+    <meta name="description" content="XLSファイルをアップロードして株価の終値・変動率を表示・CSVダウンロードできるツール">
+    <link rel="stylesheet" href="style.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+JP:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+    <!-- SheetJS for XLS/XLSX parsing -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+</head>
+
+<body>
+    <!-- Header -->
+    <header class="app-header">
+        <div class="header-content">
+            <div class="logo">
+                <span class="logo-icon">📈</span>
+                <h1>KabukaStockView</h1>
+            </div>
+            <p class="subtitle">XLSファイルをアップロードして株価データを分析</p>
+        </div>
+    </header>
+
+    <main class="container">
+        <!-- Upload Section -->
+        <section class="card upload-section" id="uploadSection">
+            <div class="card-header">
+                <span class="card-icon">📁</span>
+                <h2>ファイルアップロード</h2>
+            </div>
+            <div class="source-notice">
+                <span class="notice-icon">💡</span>
+                <p>アップロードするXLSファイルは <a href="https://www.jpx.co.jp/markets/statistics-equities/misc/01.html"
+                        target="_blank" rel="noopener noreferrer">JPX（日本取引所グループ）その他統計資料ページ</a> からダウンロードしてください。</p>
+            </div>
+            <div class="drop-zone" id="dropZone">
+                <div class="drop-zone-content">
+                    <div class="drop-icon">📄</div>
+                    <p class="drop-text">XLS / XLSX ファイルをドラッグ＆ドロップ</p>
+                    <p class="drop-hint">または</p>
+                    <label class="file-btn" for="fileInput">
+                        <span class="btn-icon">📂</span>
+                        ファイルを選択
+                    </label>
+                    <input type="file" id="fileInput" accept=".xls,.xlsx" hidden>
+                </div>
+            </div>
+            <!-- File Info (shown after upload) -->
+            <div class="file-info" id="fileInfo" style="display:none">
+                <div class="file-info-details">
+                    <span class="file-icon">📊</span>
+                    <div>
+                        <p class="file-name" id="fileName"></p>
+                        <p class="file-meta"><span id="fileSize"></span> · <span id="rowCount">0</span> 行</p>
+                    </div>
+                </div>
+                <button class="btn-remove" id="fileRemove" title="ファイルを削除">✕</button>
+            </div>
+        </section>
+
+        <!-- Action Section -->
+        <section class="card action-section" id="actionSection" style="display:none">
+            <div class="card-header">
+                <span class="card-icon">⚡</span>
+                <h2>データ操作</h2>
+            </div>
+            <div class="action-buttons">
+                <button class="btn btn-primary" id="fetchBtn">
+                    <span class="btn-icon">🔍</span>
+                    終値・変動率を取得
+                </button>
+                <button class="btn btn-success" id="downloadBtn" disabled>
+                    <span class="btn-icon">💾</span>
+                    CSVダウンロード
+                </button>
+            </div>
+        </section>
+
+        <!-- Progress Section -->
+        <section class="card progress-section" id="progressSection" style="display:none">
+            <div class="card-header">
+                <span class="card-icon">⏳</span>
+                <h2>取得中...</h2>
+            </div>
+            <div class="progress-container">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div class="progress-info">
+                    <span id="progressLabel">0 / 0 銘柄</span>
+                    <span id="progressValue">0%</span>
+                </div>
+                <p class="progress-detail" id="progressDetail">準備中...</p>
+            </div>
+        </section>
+
+        <!-- Results Summary -->
+        <section class="card results-section" id="resultsSection" style="display:none">
+            <div class="card-header">
+                <span class="card-icon">📊</span>
+                <h2>取得結果</h2>
+            </div>
+            <div class="stats-grid">
+                <div class="stat-card stat-success">
+                    <div class="stat-value" id="successCount">0</div>
+                    <div class="stat-label">成功</div>
+                </div>
+                <div class="stat-card stat-warning">
+                    <div class="stat-value" id="naCount">0</div>
+                    <div class="stat-label">N/A</div>
+                </div>
+                <div class="stat-card stat-error">
+                    <div class="stat-value" id="errorCount">0</div>
+                    <div class="stat-label">エラー</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Error Log -->
+        <section class="card error-section" id="errorSection" style="display:none">
+            <div class="card-header">
+                <span class="card-icon">⚠️</span>
+                <h2>エラーログ</h2>
+            </div>
+            <div class="error-log" id="errorLog"></div>
+        </section>
+
+        <!-- Data Table -->
+        <section class="card table-section" id="tableSection" style="display:none">
+            <div class="card-header">
+                <span class="card-icon">📋</span>
+                <h2>データプレビュー</h2>
+                <span class="row-badge" id="tableRowCount"></span>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table" id="dataTable">
+                    <thead id="tableHead"></thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <footer class="app-footer">
+        <p>KabukaStockView &copy; 2026 — Yahoo Finance API を使用</p>
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
