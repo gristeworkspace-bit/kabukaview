@@ -24,7 +24,7 @@ const COL = {
 // State
 // ============================================
 let xlsData = null;        // { header: string[], rows: any[][] }
-let closingPrices = {};    // { stockCode: { price, change1d, change7d, change14d, change30d, change180d, error } }
+let closingPrices = {};    // { stockCode: { price, change1d, change7d, change30d, change90d, change180d, error } }
 let errorMessages = [];
 let isFetching = false;
 let sortColIdx = -1;
@@ -246,8 +246,8 @@ async function fetchClosingPrice(ticker, targetDateStr) {
         actualDate: null,
         change1d: null,
         change7d: null,
-        change14d: null,
         change30d: null,
+        change90d: null,
         change180d: null,
         error: null
     };
@@ -256,6 +256,7 @@ async function fetchClosingPrice(ticker, targetDateStr) {
 
     try {
         const targetDate = parseDateValue(targetDateStr);
+        targetDate.setHours(23, 59, 59); // 終値データのタイムスタンプ（15:00 JST）を確実に含める
         const targetTs = Math.floor(targetDate.getTime() / 1000);
 
         // 6ヶ月比のため200日前まで取得
@@ -317,20 +318,34 @@ async function fetchClosingPrice(ticker, targetDateStr) {
         const actualDate = new Date(actualTs * 1000);
         const formattedDate = `${actualDate.getFullYear()}/${String(actualDate.getMonth() + 1).padStart(2, '0')}/${String(actualDate.getDate()).padStart(2, '0')}`;
 
-        // 前日比: 実際の1つ前の取引日と比較（カレンダー日付ではなく取引日ベース）
+        // 前日比: 実際の1つ前の取引日と比較（取引日ベース）
         const price1d = currentIdx >= 1 ? tradingDays[currentIdx - 1].close : null;
 
-        // 1週間〜6ヶ月比: 実際の取引日のタイムスタンプから期間を引いて最も近い取引日と比較
-        const price7d = findClosestPrice(timestamps, closes, actualTs - 7 * 86400);
-        const price14d = findClosestPrice(timestamps, closes, actualTs - 14 * 86400);
-        const price30d = findClosestPrice(timestamps, closes, actualTs - 30 * 86400);
-        const price180d = findClosestPrice(timestamps, closes, actualTs - 180 * 86400);
+        // カレンダーベースで過去日を計算し、最も近い営業日（取引日）の終値と比較
+        const actualDateObj = new Date(actualTs * 1000);
+
+        const date7d = new Date(actualDateObj);
+        date7d.setDate(date7d.getDate() - 7);
+
+        const date1m = new Date(actualDateObj);
+        date1m.setMonth(date1m.getMonth() - 1);
+
+        const date3m = new Date(actualDateObj);
+        date3m.setMonth(date3m.getMonth() - 3);
+
+        const date6m = new Date(actualDateObj);
+        date6m.setMonth(date6m.getMonth() - 6);
+
+        const price7d = findClosestPrice(timestamps, closes, Math.floor(date7d.getTime() / 1000));
+        const price30d = findClosestPrice(timestamps, closes, Math.floor(date1m.getTime() / 1000));
+        const price90d = findClosestPrice(timestamps, closes, Math.floor(date3m.getTime() / 1000));
+        const price180d = findClosestPrice(timestamps, closes, Math.floor(date6m.getTime() / 1000));
 
         // 変動率を計算
         const change1d = calcChangeRate(currentPrice, price1d);
         const change7d = calcChangeRate(currentPrice, price7d);
-        const change14d = calcChangeRate(currentPrice, price14d);
         const change30d = calcChangeRate(currentPrice, price30d);
+        const change90d = calcChangeRate(currentPrice, price90d);
         const change180d = calcChangeRate(currentPrice, price180d);
 
         return {
@@ -338,8 +353,8 @@ async function fetchClosingPrice(ticker, targetDateStr) {
             actualDate: formattedDate,
             change1d,
             change7d,
-            change14d,
             change30d,
+            change90d,
             change180d,
             error: null
         };
@@ -486,8 +501,8 @@ const EXTRA_COLS = [
     { key: 'price', label: '終値' },
     { key: 'change1d', label: '前日比(%)' },
     { key: 'change7d', label: '1週間比(%)' },
-    { key: 'change14d', label: '2週間比(%)' },
     { key: 'change30d', label: '1ヶ月比(%)' },
+    { key: 'change90d', label: '3ヶ月比(%)' },
     { key: 'change180d', label: '6ヶ月比(%)' },
 ];
 
@@ -559,7 +574,7 @@ function renderTable() {
             }
 
             // 変動率列
-            for (const key of ['change1d', 'change7d', 'change14d', 'change30d', 'change180d']) {
+            for (const key of ['change1d', 'change7d', 'change30d', 'change90d', 'change180d']) {
                 const val = pd?.[key];
                 if (val !== null && val !== undefined) {
                     const sign = val > 0 ? '+' : '';
@@ -669,7 +684,7 @@ function generateOutputCSV() {
         cells.push(pd && pd.price !== null ? String(pd.price) : 'N/A');
 
         // 変動率
-        for (const key of ['change1d', 'change7d', 'change14d', 'change30d', 'change180d']) {
+        for (const key of ['change1d', 'change7d', 'change30d', 'change90d', 'change180d']) {
             const val = pd?.[key];
             cells.push(val !== null && val !== undefined ? val.toFixed(2) : 'N/A');
         }
@@ -790,7 +805,10 @@ dom.dropZone.addEventListener('drop', (e) => {
     handleFile(file);
 });
 
-dom.dropZone.addEventListener('click', () => {
+dom.dropZone.addEventListener('click', (e) => {
+    // label.file-btn は for 属性で fileInput を自動的にトリガーするため、
+    // label やその子要素からのクリックでは重複呼び出しを避ける
+    if (e.target.closest('.file-btn')) return;
     dom.fileInput.click();
 });
 
