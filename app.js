@@ -249,6 +249,8 @@ async function fetchClosingPrice(ticker, targetDateStr) {
         change30d: null,
         change90d: null,
         change180d: null,
+        vwap: null,
+        vwapDev: null,
         error: null
     };
 
@@ -348,6 +350,65 @@ async function fetchClosingPrice(ticker, targetDateStr) {
         const change90d = calcChangeRate(currentPrice, price90d);
         const change180d = calcChangeRate(currentPrice, price180d);
 
+        // --- VWAP算出のための5分足取得 ---
+        let vwap = null;
+        let vwapDev = null;
+        try {
+            const vwapUrl = `${YAHOO_API_BASE}${encodeURIComponent(ticker)}?range=5d&interval=5m`;
+            const vwapProxyUrl = `${CORS_PROXY}${encodeURIComponent(vwapUrl)}`;
+            const vwapResponse = await fetch(vwapProxyUrl, {
+                headers: { 'Accept': 'application/json' }
+            });
+            if (vwapResponse.ok) {
+                const vwapData = await vwapResponse.json();
+                if (vwapData.chart && vwapData.chart.result && vwapData.chart.result.length > 0) {
+                    const vRes = vwapData.chart.result[0];
+                    const vTimestamps = vRes.timestamp || [];
+                    const quote = vRes.indicators?.quote?.[0];
+                    if (quote) {
+                        const vHighs = quote.high || [];
+                        const vLows = quote.low || [];
+                        const vCloses = quote.close || [];
+                        const vVolumes = quote.volume || [];
+
+                        // 基準日 (actualDateObj) の 0:00:00 〜 23:59:59 (ローカル時間=JST想定) をターゲットに
+                        const y = actualDateObj.getFullYear();
+                        const m = actualDateObj.getMonth();
+                        const day = actualDateObj.getDate();
+                        const startJst = new Date(y, m, day, 0, 0, 0).getTime() / 1000;
+                        const endJst = new Date(y, m, day, 23, 59, 59).getTime() / 1000;
+
+                        let totalTypicalVolume = 0;
+                        let totalVolume = 0;
+
+                        for (let i = 0; i < vTimestamps.length; i++) {
+                            const ts = vTimestamps[i];
+                            if (ts >= startJst && ts <= endJst) {
+                                const h = vHighs[i];
+                                const l = vLows[i];
+                                const c = vCloses[i];
+                                const vol = vVolumes[i];
+
+                                if (h != null && l != null && c != null && vol != null && vol > 0) {
+                                    const typicalPrice = (h + l + c) / 3;
+                                    totalTypicalVolume += typicalPrice * vol;
+                                    totalVolume += vol;
+                                }
+                            }
+                        }
+
+                        if (totalVolume > 0) {
+                            vwap = totalTypicalVolume / totalVolume;
+                            vwap = Math.round(vwap * 10) / 10;
+                            vwapDev = Math.round((currentPrice - vwap) / vwap * 10000) / 100;
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn(`VWAP fetch failed for ${ticker}`, e);
+        }
+
         return {
             price: Math.round(currentPrice * 10) / 10,
             actualDate: formattedDate,
@@ -356,6 +417,8 @@ async function fetchClosingPrice(ticker, targetDateStr) {
             change30d,
             change90d,
             change180d,
+            vwap,
+            vwapDev,
             error: null
         };
     } catch (err) {
@@ -504,6 +567,8 @@ const EXTRA_COLS = [
     { key: 'change30d', label: '1ヶ月比(%)' },
     { key: 'change90d', label: '3ヶ月比(%)' },
     { key: 'change180d', label: '6ヶ月比(%)' },
+    { key: 'vwap', label: 'VWAP' },
+    { key: 'vwapDev', label: 'VWAP乖離率(%)' },
 ];
 
 function renderTable() {
@@ -573,13 +638,17 @@ function renderTable() {
                 cells.push(`<td class="price-cell no-price">N/A</td>`);
             }
 
-            // 変動率列
-            for (const key of ['change1d', 'change7d', 'change30d', 'change90d', 'change180d']) {
+            // 変動率・VWAP列
+            for (const key of ['change1d', 'change7d', 'change30d', 'change90d', 'change180d', 'vwap', 'vwapDev']) {
                 const val = pd?.[key];
                 if (val !== null && val !== undefined) {
-                    const sign = val > 0 ? '+' : '';
-                    const colorClass = val > 0 ? 'change-up' : val < 0 ? 'change-down' : '';
-                    cells.push(`<td class="price-cell has-price ${colorClass}">${sign}${val.toFixed(2)}%</td>`);
+                    if (key === 'vwap') {
+                        cells.push(`<td class="price-cell has-price">${val.toLocaleString()}</td>`);
+                    } else {
+                        const sign = val > 0 ? '+' : '';
+                        const colorClass = val > 0 ? 'change-up' : val < 0 ? 'change-down' : '';
+                        cells.push(`<td class="price-cell has-price ${colorClass}">${sign}${val.toFixed(2)}%</td>`);
+                    }
                 } else {
                     cells.push(`<td class="price-cell no-price">N/A</td>`);
                 }
@@ -683,10 +752,14 @@ function generateOutputCSV() {
         // 終値
         cells.push(pd && pd.price !== null ? String(pd.price) : 'N/A');
 
-        // 変動率
-        for (const key of ['change1d', 'change7d', 'change30d', 'change90d', 'change180d']) {
+        // 変動率・VWAP
+        for (const key of ['change1d', 'change7d', 'change30d', 'change90d', 'change180d', 'vwap', 'vwapDev']) {
             const val = pd?.[key];
-            cells.push(val !== null && val !== undefined ? val.toFixed(2) : 'N/A');
+            if (val !== null && val !== undefined) {
+                cells.push(key === 'vwap' ? String(val) : val.toFixed(2));
+            } else {
+                cells.push('N/A');
+            }
         }
 
         lines.push(cells.join(','));
