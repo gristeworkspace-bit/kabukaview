@@ -249,6 +249,7 @@ async function fetchClosingPrice(ticker, targetDateStr) {
         change30d: null,
         change90d: null,
         change180d: null,
+        volumeChange1d: null,
         vwap: null,
         vwapDev: null,
         error: null
@@ -285,6 +286,7 @@ async function fetchClosingPrice(ticker, targetDateStr) {
         const result = data.chart.result[0];
         const timestamps = result.timestamp || [];
         const closes = result.indicators?.quote?.[0]?.close || [];
+        const volumes = result.indicators?.quote?.[0]?.volume || [];
 
         if (timestamps.length === 0 || closes.length === 0) {
             return { ...nullResult, error: 'チャートデータなし' };
@@ -294,7 +296,7 @@ async function fetchClosingPrice(ticker, targetDateStr) {
         const tradingDays = [];
         for (let i = 0; i < timestamps.length; i++) {
             if (closes[i] !== null && closes[i] !== undefined) {
-                tradingDays.push({ ts: timestamps[i], close: closes[i] });
+                tradingDays.push({ ts: timestamps[i], close: closes[i], volume: volumes[i] });
             }
         }
         tradingDays.sort((a, b) => a.ts - b.ts);
@@ -322,6 +324,8 @@ async function fetchClosingPrice(ticker, targetDateStr) {
 
         // 前日比: 実際の1つ前の取引日と比較（取引日ベース）
         const price1d = currentIdx >= 1 ? tradingDays[currentIdx - 1].close : null;
+        const currentVolume = tradingDays[currentIdx].volume;
+        const volume1d = currentIdx >= 1 ? tradingDays[currentIdx - 1].volume : null;
 
         // カレンダーベースで過去日を計算し、最も近い営業日（取引日）の終値と比較
         const actualDateObj = new Date(actualTs * 1000);
@@ -349,6 +353,7 @@ async function fetchClosingPrice(ticker, targetDateStr) {
         const change30d = calcChangeRate(currentPrice, price30d);
         const change90d = calcChangeRate(currentPrice, price90d);
         const change180d = calcChangeRate(currentPrice, price180d);
+        const volumeChange1d = calcChangeRate(currentVolume, volume1d);
 
         // --- VWAP算出のための5分足取得 ---
         let vwap = null;
@@ -417,6 +422,7 @@ async function fetchClosingPrice(ticker, targetDateStr) {
             change30d,
             change90d,
             change180d,
+            volumeChange1d,
             vwap,
             vwapDev,
             error: null
@@ -567,6 +573,7 @@ const EXTRA_COLS = [
     { key: 'change30d', label: '1ヶ月比(%)' },
     { key: 'change90d', label: '3ヶ月比(%)' },
     { key: 'change180d', label: '6ヶ月比(%)' },
+    { key: 'volumeChange1d', label: '出来高前日比(%)' },
     { key: 'vwap', label: 'VWAP' },
     { key: 'vwapDev', label: 'VWAP乖離率(%)' },
 ];
@@ -639,7 +646,7 @@ function renderTable() {
             }
 
             // 変動率・VWAP列
-            for (const key of ['change1d', 'change7d', 'change30d', 'change90d', 'change180d', 'vwap', 'vwapDev']) {
+            for (const key of ['change1d', 'change7d', 'change30d', 'change90d', 'change180d', 'volumeChange1d', 'vwap', 'vwapDev']) {
                 const val = pd?.[key];
                 if (val !== null && val !== undefined) {
                     if (key === 'vwap') {
@@ -753,7 +760,7 @@ function generateOutputCSV() {
         cells.push(pd && pd.price !== null ? String(pd.price) : 'N/A');
 
         // 変動率・VWAP
-        for (const key of ['change1d', 'change7d', 'change30d', 'change90d', 'change180d', 'vwap', 'vwapDev']) {
+        for (const key of ['change1d', 'change7d', 'change30d', 'change90d', 'change180d', 'volumeChange1d', 'vwap', 'vwapDev']) {
             const val = pd?.[key];
             if (val !== null && val !== undefined) {
                 cells.push(key === 'vwap' ? String(val) : val.toFixed(2));
