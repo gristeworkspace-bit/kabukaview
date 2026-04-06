@@ -448,6 +448,7 @@ async function fetchClosingPrice(ticker, targetDateStr) {
 
         return {
             price: Math.round(currentPrice * 10) / 10,
+            volume: currentVolume,
             actualDate: formattedDate,
             change1d,
             change7d,
@@ -600,6 +601,7 @@ const DISPLAY_COLS = [
 // 追加列（価格取得後に表示）
 const EXTRA_COLS = [
     { key: 'price', label: '終値' },
+    { key: 'volume', label: '出来高' },
     { key: 'change1d', label: '前日比(%)' },
     { key: 'change7d', label: '1週間比(%)' },
     { key: 'change30d', label: '1ヶ月比(%)' },
@@ -678,10 +680,10 @@ function renderTable() {
             }
 
             // 変動率・VWAP列
-            for (const key of ['change1d', 'change7d', 'change30d', 'change90d', 'change180d', 'volumeChange1d', 'vwap', 'vwapDev']) {
+            for (const key of ['volume', 'change1d', 'change7d', 'change30d', 'change90d', 'change180d', 'volumeChange1d', 'vwap', 'vwapDev']) {
                 const val = pd?.[key];
                 if (val !== null && val !== undefined) {
-                    if (key === 'vwap') {
+                    if (key === 'vwap' || key === 'volume') {
                         cells.push(`<td class="price-cell has-price">${val.toLocaleString()}</td>`);
                     } else {
                         const sign = val > 0 ? '+' : '';
@@ -791,11 +793,11 @@ function generateOutputCSV() {
         // 終値
         cells.push(pd && pd.price !== null ? String(pd.price) : 'N/A');
 
-        // 変動率・VWAP
-        for (const key of ['change1d', 'change7d', 'change30d', 'change90d', 'change180d', 'volumeChange1d', 'vwap', 'vwapDev']) {
+        // 数値・変動率・VWAP
+        for (const key of ['volume', 'change1d', 'change7d', 'change30d', 'change90d', 'change180d', 'volumeChange1d', 'vwap', 'vwapDev']) {
             const val = pd?.[key];
             if (val !== null && val !== undefined) {
-                cells.push(key === 'vwap' ? String(val) : val.toFixed(2));
+                cells.push(key === 'vwap' || key === 'volume' ? String(val) : val.toFixed(2));
             } else {
                 cells.push('N/A');
             }
