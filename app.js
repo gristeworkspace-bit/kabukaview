@@ -238,6 +238,38 @@ function parseDateValue(dateVal) {
 }
 
 /**
+ * リトライ機能付きの fetch
+ * HTTP 429 が発生した場合は、指数バックオフ（徐々に待機時間を延ばす）で再試行する
+ */
+async function fetchWithRetry(url, options = {}, maxRetries = 3) {
+    let retries = 0;
+    while (true) {
+        const response = await fetch(url, options);
+        if (response.ok) {
+            return response;
+        }
+        if (response.status === 429) {
+            if (retries >= maxRetries) {
+                return response;
+            }
+            retries++;
+            // 待機時間: 初回約3秒, 2回目約6秒, 3回目約12秒 (+ランダムなジッターを加えてAPI側の負荷集中を防ぐ)
+            const delay = (Math.pow(2, retries - 1) * 3000) + Math.random() * 500;
+            console.warn(`HTTP 429 API rate limit exceeded. Retrying in ${Math.round(delay)}ms... (${retries}/${maxRetries})`);
+            
+            // 進捗表示にリトライ中であることを追記
+            if (dom.progressDetail && dom.progressDetail.textContent && !dom.progressDetail.textContent.includes('リトライ待機中')) {
+                dom.progressDetail.textContent += ' [リトライ待機中...]';
+            }
+
+            await sleep(delay);
+            continue;
+        }
+        return response;
+    }
+}
+
+/**
  * 指定ティッカーの終値・株価変動率を取得
  */
 async function fetchClosingPrice(ticker, targetDateStr) {
@@ -269,9 +301,9 @@ async function fetchClosingPrice(ticker, targetDateStr) {
         const apiUrl = `${YAHOO_API_BASE}${encodeURIComponent(ticker)}?period1=${startTs}&period2=${endTs}&interval=1d`;
         const proxyUrl = `${CORS_PROXY}${encodeURIComponent(apiUrl)}`;
 
-        const response = await fetch(proxyUrl, {
+        const response = await fetchWithRetry(proxyUrl, {
             headers: { 'Accept': 'application/json' }
-        });
+        }, 3); // 最大3回リトライ
 
         if (!response.ok) {
             return { ...nullResult, error: `HTTP ${response.status}` };
@@ -361,9 +393,9 @@ async function fetchClosingPrice(ticker, targetDateStr) {
         try {
             const vwapUrl = `${YAHOO_API_BASE}${encodeURIComponent(ticker)}?range=5d&interval=5m`;
             const vwapProxyUrl = `${CORS_PROXY}${encodeURIComponent(vwapUrl)}`;
-            const vwapResponse = await fetch(vwapProxyUrl, {
+            const vwapResponse = await fetchWithRetry(vwapProxyUrl, {
                 headers: { 'Accept': 'application/json' }
-            });
+            }, 3); // 最大3回リトライ
             if (vwapResponse.ok) {
                 const vwapData = await vwapResponse.json();
                 if (vwapData.chart && vwapData.chart.result && vwapData.chart.result.length > 0) {
