@@ -291,6 +291,7 @@ body {
     font-weight: 600;
     font-size: 0.95rem;
     color: var(--text-primary);
+    word-break: break-word;
 }
 
 .file-meta {
@@ -664,21 +665,113 @@ body {
 /* ============================================
    Responsive
    ============================================ */
-@media (max-width: 768px) {
+
+/* Tablet (Large) */
+@media (max-width: 1024px) {
     .container {
+        padding: 1.5rem;
+    }
+    
+    .stats-grid {
+        gap: 0.75rem;
+    }
+
+    .stat-card {
         padding: 1rem;
+    }
+    
+    .stat-value {
+        font-size: 1.75rem;
+    }
+}
+
+/* Tablet (Portrait) & Large Mobile */
+@media (max-width: 768px) {
+    .app-header {
+        padding: 1rem 1.5rem;
+    }
+
+    .container {
+        padding: 1.25rem 1rem;
+        gap: 1.25rem;
     }
 
     .card {
         padding: 1.25rem;
+        /* Prevent card overflow on very small devices */
+        overflow: hidden;
+    }
+    
+    .card-header h2 {
+        font-size: 1.05rem;
     }
 
     .drop-zone {
         padding: 2rem 1rem;
     }
 
+    .drop-icon {
+        font-size: 2.5rem;
+    }
+    
+    .drop-text {
+        font-size: 0.95rem;
+    }
+
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .stat-card:last-child {
+        grid-column: span 2; /* Center the last odd card if there are 3 */
+    }
+
+    .action-buttons {
+        gap: 0.75rem;
+    }
+
+    .logo h1 {
+        font-size: 1.3rem;
+    }
+
+    .subtitle {
+        font-size: 0.8rem;
+        margin-left: 2.55rem;
+    }
+    
+    /* Enhance table scrolling on iOS & Android */
+    .table-wrapper {
+        -webkit-overflow-scrolling: touch;
+        margin: 0 -1.25rem; /* Break out of card padding for edge-to-edge scrolling */
+        padding: 0;
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+    }
+
+    .data-table th:first-child,
+    .data-table td:first-child {
+        padding-left: 1.25rem; /* Re-add padding inside the table to keep text aligned */
+    }
+    
+    .data-table th:last-child,
+    .data-table td:last-child {
+        padding-right: 1.25rem;
+    }
+}
+
+/* Mobile (Small) */
+@media (max-width: 480px) {
+    .app-header {
+        padding: 1rem;
+    }
+
     .stats-grid {
         grid-template-columns: 1fr;
+    }
+    
+    .stat-card:last-child {
+        grid-column: auto;
     }
 
     .action-buttons {
@@ -686,15 +779,63 @@ body {
     }
 
     .btn {
+        width: 100%;
         justify-content: center;
+        padding: 0.85rem 1.5rem; /* Better tap target */
     }
 
     .logo h1 {
-        font-size: 1.2rem;
+        font-size: 1.15rem;
+    }
+
+    .logo-icon {
+        font-size: 1.5rem;
     }
 
     .subtitle {
         font-size: 0.75rem;
-        margin-left: 2.5rem;
+        margin-left: 2.25rem;
+        margin-top: 0.15rem;
+    }
+    
+    .file-info {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+    
+    .file-info-details {
+        width: 100%;
+    }
+    
+    .btn-remove {
+        align-self: flex-end;
+        width: 100%;
+        margin-top: -0.5rem;
+    }
+    
+    .progress-info {
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+}
+
+/* Safe Area Insets for modern iPhones (Notch/Dynamic Island) */
+@supports (padding: max(0px)) {
+    .app-header {
+        padding-left: max(1.5rem, env(safe-area-inset-left));
+        padding-right: max(1.5rem, env(safe-area-inset-right));
+    }
+    
+    .container {
+        padding-left: max(1rem, env(safe-area-inset-left));
+        padding-right: max(1rem, env(safe-area-inset-right));
+    }
+    
+    @media (max-width: 480px) {
+        .app-header {
+            padding-left: max(1rem, env(safe-area-inset-left));
+            padding-right: max(1rem, env(safe-area-inset-right));
+        }
     }
 }
